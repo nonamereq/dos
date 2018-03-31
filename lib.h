@@ -8,55 +8,69 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
+#define MY_BUFFER 4096
+
 enum MessageType{ NONE, PEER_MESSAGE, CONNECT_REQUEST };
 
-struct socket_disc {
-    struct sockaddr_in addr;
-    int sock_fd;
+struct server_info{
+    int sockfd;
+    in_port_t port;
 };
 
-struct sockets{
-    struct socket_disc server_addr;
-    struct socket_disc client_addr;
+struct client_info{
+    uint32_t addr;
+    in_port_t port;
+};
+
+union connection_info{
+    struct server_info server;
+    struct client_info client;
 };
 
 /*
  * @param char* ip
- * @param int port
- * @param struct socket
- * @return int socket_fd
+ * @return unsigned int number representation of the ip
  */
-int create_client_socket(char*, int, struct sockets*);
+uint32_t get_addr(char* ip);
 
 /*
  * @param char* ip
  * @param int port
- * @param struct socket
+ * @param union connection_info*
  * @return int socket_fd
  */
-int create_server_socket(char*, int, struct sockets*);
+int create_client_socket(unsigned int, int, union connection_info*);
+
+/*
+ * @param char* ip
+ * @param int port
+ * @param union connection_info*
+ * @return int socket_fd
+ */
+int create_server_socket(unsigned int, int, union connection_info*);
 
 /*
  *@param char* message
- *@param struct sockets* peer socket
+ *@param union connection_info* peer socket
+ *@param in_port_t port number of server
  *@return void
 */
-int connect_client(char*, struct sockets*);
+int connect_client(char*, in_port_t, union connection_info*);
 
 /*
  *@param char* message
- *@param struct sockets* peer socket
+ *@param union connection_info* peer socket
  *@return void
 */
-int send_message(char*, struct sockets*);
+int send_message(char*, union connection_info*);
 
 /*
  * @param char* message
- * @param struct sockets* peer
+ * @param union connection_info* peer
  * @param struct sockaddr_in * client address
  * @param int* connected are we connected
  * @return enum MessageType 
  */
-enum MessageType parse_message(char*, struct sockets*, struct sockaddr_in*, int*);
+enum MessageType parse_message(char*, union connection_info*, struct sockaddr_in*,int*);
 
 #endif

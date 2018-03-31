@@ -1,14 +1,12 @@
 #include <stdio.h>
-#include <stdlib.h>
 
 #include <unistd.h>
 #include <sys/select.h>
 
 #include "lib.h"
 
-#define MY_BUFFER 4096
 
-struct sockets mine, peer;
+union connection_info mine, peer;
 int connected = 0;
 
 void read_stdin();
@@ -23,13 +21,14 @@ int main(int args, char** argv){
         return 0;
     }
 
-    socket_fd = create_server_socket("127.0.0.1", atoi(argv[1]), &mine);
+    bzero(&mine, sizeof(mine));
+    bzero(&peer, sizeof(peer));
+    socket_fd = create_server_socket(get_addr("127.0.0.1"), atoi(argv[1]), &mine);
     if(socket_fd < 0){
         perror("Server creation failed");
         return 1;
     }
 
-    mine.server_addr.sock_fd = socket_fd;
     printf("server runing at 127.0.0.1:%d...\n", atoi(argv[1]));
 
     printf("Enter the server to connect to (ip:port) :\n");
@@ -53,30 +52,49 @@ int main(int args, char** argv){
 
 void read_stdin(){
     char buf[MY_BUFFER];
+    char* needle;
+
+    bzero(buf, MY_BUFFER);
+
     if(fgets(buf, MY_BUFFER, stdin)){
+        if((needle = strchr(buf, '\n')) != NULL)
+            *needle = '\0';
         if(connected)
             send_message(buf, &peer);
         else
-            connected = connect_client(buf, &mine);
+            connected = connect_client(buf, mine.server.port, &peer);
     }
 }
 
 void read_socket(){
     char buf[MY_BUFFER];
     struct sockaddr_in client_addr;
-    unsigned int socket_len;
+    unsigned int socket_len, nbytes;
     int connfd, old_connected=connected;
     enum MessageType type;
 
-    if((connfd = accept(mine.server_addr.sock_fd,(struct sockaddr *)&client_addr,&socket_len)) < 0)
+    bzero(buf, MY_BUFFER);
+
+
+    socket_len = sizeof(client_addr);
+
+    if((connfd = accept(mine.server.sockfd,(struct sockaddr *)&client_addr,&socket_len)) < 0)
         return;
 
-    if(connected && client_addr.sin_addr.s_addr != peer.client_addr.addr.sin_addr.s_addr)
+    if(connected && client_addr.sin_addr.s_addr != peer.client.addr)
         return;
 
-    if(recv(connfd, buf, MY_BUFFER, 0) < 0){
-        perror("receving failed");
-        return;
+    if((nbytes = recv(connfd, buf, MY_BUFFER, 0)) < 0){
+        if(nbytes == 0){
+            connected = 0;
+            printf("Connection ended by peer\n");
+            printf("Enter the server to connect to (ip:port) :\n");
+            return;
+        }
+        else{
+            perror("receving failed");
+            return;
+        }
     }
 
     type = parse_message(buf, &peer, &client_addr, &connected);
@@ -84,11 +102,13 @@ void read_socket(){
     if(!old_connected && connected){
         sprintf(buf, "%c%s", -1, "connected successfully\n");
         printf("Connected to %s. You can now send messages\n", inet_ntoa(client_addr.sin_addr));
-    }else{
+    }else if(!connected){
         sprintf(buf, "%c%s", 0, "connection unsucessful\n");
     }
     send(connfd, buf, strlen(buf), 0);
     if(type == PEER_MESSAGE){
-        printf("%s: %s", inet_ntoa(client_addr.sin_addr), buf);
+        printf("%s: %s\n", inet_ntoa(client_addr.sin_addr), buf);
     }
+
+    close(connfd);
 }
