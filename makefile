@@ -30,14 +30,12 @@ release: all
 sanitize: CCFLAGS += $(SANITIZE)
 sanitize: all
 
-all: prep peer ddos
+all: prep ddos
 
 
 ddos: $(DDOSOBJS)
 	$(CC) $(CCFLAGS) -o $@ $^
 
-peer: $(OBJFILES)
-	$(CC) $(CCFLAGS) -o $@ $^
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c
 	$(CC) -I $(INCLUDE) $(CCFLAGS) $(COMPILE) -o $@ $<
